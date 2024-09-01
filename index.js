@@ -1,9 +1,11 @@
 import express from "express";
 import morgan from "morgan";
+import cors from "cors";
 
 const app = express();
 
 app.use(express.json());
+app.use(cors());
 morgan.token("body", (req) => JSON.stringify(req.body));
 app.use(
   morgan(":method :url :status :res[content-length] - :response-time ms :body"),
@@ -90,9 +92,9 @@ app.post("/api/persons", (req, res) => {
   res.status(201).json(newPerson);
 });
 
-const port = 3001;
+const port = process.env.PORT || 3001;
 app.listen(port, () => {
   console.log("server listening on port", port);
 });
 
-export default app
+export default app;
