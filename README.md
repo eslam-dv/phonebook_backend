@@ -1,3 +1,3 @@
 # phonebook_backend
 
-link to api: [phonebook_backend](https://api.phonebook-backend.vercel.app)
+link to api: [phonebook_backend](https://phonebook-backend-seven.vercel.app)
