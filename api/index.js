@@ -1,101 +1,123 @@
 import express from "express";
 import morgan from "morgan";
 import cors from "cors";
+import mongoose from "mongoose";
+import "dotenv/config";
+
+import phoneModel from "./models/phone.js";
 
 const app = express();
+morgan.token("body", (req) => JSON.stringify(req.body));
 
+app.use(express.static("dist"));
 app.use(express.json());
 app.use(cors());
-morgan.token("body", (req) => JSON.stringify(req.body));
 app.use(
   morgan(":method :url :status :res[content-length] - :response-time ms :body"),
 );
-app.use(express.static("dist"));
 
-let persons = [
-  {
-    id: "1",
-    name: "Arto Hellas",
-    number: "040-123456",
-  },
-  {
-    id: "2",
-    name: "Ada Lovelace",
-    number: "39-44-5323523",
-  },
-  {
-    id: "3",
-    name: "Dan Abramov",
-    number: "12-43-234345",
-  },
-  {
-    id: "4",
-    name: "Mary Poppendieck",
-    number: "39-23-6423122",
-  },
-];
+// override handling for some errors
+const errorHandler = (err, _, res, next) => {
+  console.error(err.message);
+  if (err.name === "CastError") {
+    return res.status(400).json({ error: "malformatted id" });
+  } else if (err.name === "ValidationError") {
+    return res.status(400).json({ error: err.message });
+  }
+  next(err);
+};
+
+// handler of requests with unknown endpoint
+const unknownEndpoint = (_, res) => {
+  res.status(404).send({ error: "unknown endpoint" });
+};
 
 // GET /api/persons
 // return a list of all people in phonebook
 app.get("/api/persons", (_, res) => {
-  res.json(persons);
+  phoneModel.find({}).then((persons) => res.status(200).json(persons));
 });
 
 // GET /info
 // returns info about the phonebook and the current time
-app.get("/info", (_, res) => {
-  res.send(
-    `<p>Phonebook has info for ${persons.length} people</p>
+app.get("/api/persons/info", (_, res) => {
+  phoneModel.find({}).then((persons) => {
+    res.send(
+      `<p>Phonebook has info for ${persons.length} people</p>
       <p>${Date()}</p>`,
-  );
+    );
+  });
 });
 
 // GET /api/persons/:id
 // returns a single person's information
 app.get("/api/persons/:id", (req, res) => {
-  const id = req.params.id;
-  const person = persons.find((person) => person.id === id);
-  if (!person) {
-    return res.status(404).json({ error: "Person not found" });
-  }
-  res.json(person);
+  phoneModel
+    .findById(req.params.id)
+    .then((person) => {
+      if (!person) return res.status(404).json({ error: "Person not found" });
+      res.status(200).json(person);
+    })
+    .catch((err) => {
+      next(err);
+    });
 });
 
 // DELETE /api/persons/:id
 // delete a person from the phonebook
 app.delete("/api/persons/:id", (req, res) => {
-  const id = req.params.id;
-  const person = persons.find((person) => person.id === id);
-  if (!person) {
-    return res.status(404).json({ error: "Person not found" });
-  }
-  persons = persons.map((p) => (p.id !== id ? p : null));
-  res.status(200).json({ message: `succefully deleted '${person.name}'` });
+  phoneModel
+    .findByIdAndDelete(req.params.id)
+    .then((person) => {
+      if (!person) return res.status(404).json({ error: "Person not found" });
+      res.status(204).json();
+    })
+    .catch((err) => next(err));
 });
 
 // POST /api/persons
 // EX: body => {name: "jhon", number: "1234"}
 // add new person to phonebook
-app.post("/api/persons", (req, res) => {
+app.post("/api/persons", (req, res, next) => {
   const { name, number } = req.body;
   if (!name || !number) {
     return res.status(400).json({ error: "provide a name and number" });
   }
-  if (persons.find((person) => person.name === name)) {
-    return res.status(400).json({ error: "name must be unique" });
-  }
-  const newPerson = {
-    id: String(Math.floor(Math.random() * 9999)),
-    name,
-    number,
-  };
-  persons = persons.concat(newPerson);
-  res.status(201).json(newPerson);
+  phoneModel
+    .create({ name, number })
+    .then((newPerson) => res.status(201).json(newPerson))
+    .catch((err) => next(err));
 });
+
+// PUT /api/persons/:id
+// updaet existing person
+app.put("/api/persons/:id", (req, res, next) => {
+  const { name, number } = req.body;
+  phoneModel
+    .findByIdAndUpdate(
+      req.params.id,
+      { name, number },
+      { new: true, runValidators: true },
+    )
+    .then((updatedPerson) => {
+      if (!updatedPerson) {
+        return res.status(404).json({ error: "Person not found" });
+      }
+      res.status(200).json(updatedPerson);
+    })
+    .catch((err) => next(err));
+});
+
+app.use(unknownEndpoint);
+app.use(errorHandler);
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
   console.log("server listening on port", port);
 });
+mongoose.set("strictQuery", false);
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log("Connected to DB"));
 
 export default app;
