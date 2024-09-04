@@ -117,7 +117,7 @@ app.listen(port, () => {
 });
 mongoose.set("strictQuery", false);
 mongoose
-  .connect(process.env.MONGODB_URI)
+  .connect(`${process.env.MONGODB_URI}`)
   .then(() => console.log("Connected to DB"));
 
 export default app;
